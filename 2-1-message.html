@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <!-- 改用 ESM 版本的 RxJS CDN -->
+    <script type="importmap">
+    {
+      "imports": {
+        "rxjs": "https://unpkg.com/@esm-bundle/rxjs/esm/es2015/rxjs.min.js",
+        "rxjs/operators": "https://unpkg.com/@esm-bundle/rxjs/esm/es2015/rxjs-operators.min.js",
+        "rxjs/webSocket": "https://unpkg.com/@esm-bundle/rxjs/esm/es2015/rxjs-websocket.min.js"
+      }
+    }
+    </script>
+  </head>
+  <body>
+    <h1>WebSocket 訊息</h1>
+    <p id="message"></p>
+    <p id="status"></p>
+
+    <script type="module">
+      import { interval, Subject } from 'rxjs';
+      import { retry, takeUntil, take, map, filter, debounceTime } from 'rxjs/operators';
+      import { webSocket } from 'rxjs/webSocket';
+
+      const messageElement = document.querySelector('#message');
+      const statusElement = document.querySelector('#status');
+
+      // 建立 postman-echo Websocket 連線
+      const ws$ = webSocket('wss://ws.postman-echo.com/raw');
+
+      // 訂閱即時訊息
+      const subscription = ws$.subscribe({
+        next: (msg) => {
+          messageElement.textContent = `📩 收到訊息: ${msg}`;
+        },
+        error: (error) => {
+          statusElement.textContent = `❌ WebSocket 錯誤: ${error.message}`;
+          statusElement.style.color = 'red';
+        },
+        complete: () => {
+          statusElement.textContent = '🔴 WebSocket 連線已關閉';
+        },
+      });
+
+      // 1. 篩選出重要訊息
+      ws$
+        .pipe(
+          map((msg) => `📢 訊息: ${msg}`),
+          // filter((msg) => msg.includes('重要')),
+          debounceTime(200)
+        )
+        .subscribe((filteredMsg) => {
+          const p = document.createElement('p');
+          p.textContent = filteredMsg;
+          p.style.color = 'blue';
+          document.body.appendChild(p);
+        });
+
+      // 2. 使用 interval 每兩秒發送一條訊息
+      const messages = [
+        'Hello from RxJS WebSocket!',
+        '重要訊息 from Joyce',
+        '重要訊息 from Hilo',
+        'nonsense',
+        'Hello again!',
+        '重要訊息 from Andy',
+      ];
+
+      let messageIndex = 0;
+      interval(2000)
+        .pipe(
+          take(messages.length) // 只取前 N 次（N = messages.length）
+        )
+        .subscribe({
+          next: () => {
+            ws$.next(messages[messageIndex]);
+            messageIndex++;
+          },
+          complete: () => {
+            statusElement.textContent = '🔴 所有訊息已發送完畢';
+          },
+        });
+    </script>
+  </body>
+</html>
